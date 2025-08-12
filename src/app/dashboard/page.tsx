@@ -17,7 +17,7 @@ import {
   LinearProgress,
 } from "@mui/material";
 import {
-  ChildCare as Baby,
+  ChildCare as BabyIcon,
   Bedtime,
   Restaurant,
   DirectionsWalk,
@@ -237,7 +237,7 @@ export default function DashboardPage() {
                   <Avatar
                     sx={{ bgcolor: "primary.main", width: 48, height: 48 }}
                   >
-                    <Baby />
+                    <BabyIcon />
                   </Avatar>
                   <Box>
                     <Typography variant="h4" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -325,7 +325,7 @@ export default function DashboardPage() {
       {babies.length === 0 ? (
         <Card>
           <CardContent sx={{ textAlign: "center", py: 6 }}>
-            <Baby sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
+            <BabyIcon sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
             <Typography variant="h6" gutterBottom>
               Nenhum bebê cadastrado
             </Typography>
@@ -350,7 +350,7 @@ export default function DashboardPage() {
                         height: 56,
                       }}
                     >
-                      <Baby sx={{ fontSize: 32 }} />
+                      <BabyIcon sx={{ fontSize: 32 }} />
                     </Avatar>
                     <Box sx={{ flexGrow: 1 }}>
                       <Typography variant="h6" fontWeight="bold">

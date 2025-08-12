@@ -25,7 +25,7 @@ import {
 } from "@mui/material";
 import {
   Add,
-  ChildCare as Baby,
+  ChildCare as BabyIcon,
   Edit,
   Delete,
   Cake,
@@ -259,7 +259,7 @@ export default function BabiesPage() {
         {babies.length === 0 && !loading ? (
           <Card>
             <CardContent sx={{ textAlign: "center", py: 8 }}>
-              <Baby sx={{ fontSize: 80, color: "text.secondary", mb: 2 }} />
+              <BabyIcon sx={{ fontSize: 80, color: "text.secondary", mb: 2 }} />
               <Typography variant="h6" gutterBottom>
                 Nenhum bebê cadastrado
               </Typography>

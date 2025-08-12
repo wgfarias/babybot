@@ -23,7 +23,7 @@ import {
 import {
   Menu as MenuIcon,
   Dashboard,
-  ChildCare as Baby,
+  ChildCare as BabyIcon,
   Group,
   Restaurant,
   Bedtime,
@@ -44,7 +44,7 @@ const drawerWidth = 280;
 
 const menuItems = [
   { text: "Dashboard", icon: <Dashboard />, path: "/dashboard" },
-  { text: "Bebês", icon: <Baby />, path: "/dashboard/babies" },
+  { text: "Bebês", icon: <BabyIcon />, path: "/dashboard/babies" },
   { text: "Cuidadores", icon: <Group />, path: "/dashboard/caregivers" },
   { text: "Sono", icon: <Bedtime />, path: "/dashboard/sleep" },
   { text: "Alimentação", icon: <Restaurant />, path: "/dashboard/feeding" },
