@@ -119,7 +119,7 @@ export default function CaregiversPage() {
       setEditingCaregiver(caregiver);
       setFormData({
         name: caregiver.name,
-        phone: caregiver.phone,
+        phone: caregiver.phone || "",
         email: caregiver.email || "",
         relationship: caregiver.relationship || "",
       });
