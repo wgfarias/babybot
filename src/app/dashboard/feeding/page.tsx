@@ -954,7 +954,7 @@ export default function FeedingPage() {
                         helperText: "Deixe vazio se ainda estiver amamentando",
                       },
                     }}
-                    minDateTime={formData.breastfeeding_start}
+                    minDateTime={formData.breastfeeding_start ?? undefined}
                     maxDateTime={dayjs()}
                   />
                 </>

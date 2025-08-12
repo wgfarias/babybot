@@ -718,7 +718,7 @@ export default function WalksPage() {
                     helperText: "Deixe vazio se ainda estiver passeando",
                   },
                 }}
-                minDateTime={formData.walk_start}
+                minDateTime={formData.walk_start ?? undefined}
                 maxDateTime={dayjs()}
               />
 

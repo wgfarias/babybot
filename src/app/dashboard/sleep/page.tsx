@@ -731,7 +731,7 @@ export default function SleepPage() {
                     helperText: "Deixe vazio se ainda estiver dormindo",
                   },
                 }}
-                minDateTime={formData.sleep_start}
+                minDateTime={formData.sleep_start ?? undefined}
                 maxDateTime={dayjs()}
               />
 
