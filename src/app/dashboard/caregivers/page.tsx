@@ -37,7 +37,7 @@ import {
   Delete,
   Phone,
   Email,
-  Family as FamilyIcon,
+  Group as FamilyIcon,
 } from "@mui/icons-material";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
