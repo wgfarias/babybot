@@ -57,6 +57,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Baby } from "@/lib/supabase";
+import EvolutionChart, { PeriodFilter } from "@/components/EvolutionChart";
 
 dayjs.extend(duration);
 dayjs.extend(relativeTime);
@@ -106,6 +107,10 @@ export default function SleepPage() {
   const [babies, setBabies] = useState<Baby[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // Estados para o gráfico
+  const [selectedBabyChart, setSelectedBabyChart] = useState<string>("all");
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("week");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] =
     useState<SleepRecordWithRelations | null>(null);
@@ -408,6 +413,120 @@ export default function SleepPage() {
     return sleepRecords.filter((record) => record.is_sleeping);
   };
 
+  // Função para processar dados do gráfico do sono
+  const processSleepChartData = (data: SleepRecordWithRelations[], period: PeriodFilter) => {
+    // Filtrar dados por bebê selecionado
+    const filteredData = selectedBabyChart === "all" 
+      ? data 
+      : data.filter(record => record.baby_id === selectedBabyChart);
+    
+    // Filtrar por período
+    const now = dayjs();
+    let startDate: dayjs.Dayjs;
+    let groupFormat: string;
+    let labelFormat: string;
+    
+    switch (period) {
+      case "day":
+        startDate = now.subtract(6, "day");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+        break;
+      case "week":
+        startDate = now.subtract(3, "week").startOf("week");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+        break;
+      case "month":
+        startDate = now.subtract(5, "month");
+        groupFormat = "YYYY-MM";
+        labelFormat = "MMM/YY";
+        break;
+      default:
+        startDate = now.subtract(3, "week").startOf("week");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+    }
+
+    // Filtrar registros dentro do período
+    const periodData = filteredData.filter(record => {
+      const recordDate = dayjs(record.sleep_start);
+      return recordDate.isAfter(startDate) && record.sleep_end; // Apenas sonos completados
+    });
+
+    // Agrupar dados por período
+    const groupedData: { [key: string]: number[] } = {};
+    
+    periodData.forEach(record => {
+      const recordDate = dayjs(record.sleep_start);
+      const key = recordDate.format(groupFormat);
+      
+      if (record.sleep_end) {
+        const startTime = dayjs(record.sleep_start);
+        const endTime = dayjs(record.sleep_end);
+        const duration = endTime.diff(startTime, "minute");
+        const hours = duration / 60;
+        
+        if (!groupedData[key]) {
+          groupedData[key] = [];
+        }
+        groupedData[key].push(hours);
+      }
+    });
+
+    // Calcular média de horas por período
+    const labels: string[] = [];
+    const averageHours: number[] = [];
+    const totalSleeps: number[] = [];
+
+    let currentDate = startDate;
+    const increment = period === "day" ? 1 : period === "week" ? 7 : 30;
+    const unit = period === "day" ? "day" : period === "week" ? "day" : "month";
+    
+    while (currentDate.isBefore(now) || currentDate.isSame(now, 'day')) {
+      const key = currentDate.format(groupFormat);
+      const label = currentDate.format(labelFormat);
+      
+      labels.push(label);
+      
+      if (groupedData[key]) {
+        const avg = groupedData[key].reduce((a, b) => a + b, 0) / groupedData[key].length;
+        averageHours.push(Number(avg.toFixed(1)));
+        totalSleeps.push(groupedData[key].length);
+      } else {
+        averageHours.push(0);
+        totalSleeps.push(0);
+      }
+      
+      currentDate = currentDate.add(increment, unit as any);
+    }
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: "Média de Horas de Sono",
+          data: averageHours,
+          borderColor: "rgb(99, 102, 241)",
+          backgroundColor: "rgba(99, 102, 241, 0.1)",
+          borderWidth: 2,
+          fill: true,
+          tension: 0.4,
+        },
+        {
+          label: "Número de Sonos",
+          data: totalSleeps,
+          borderColor: "rgb(34, 197, 94)",
+          backgroundColor: "rgba(34, 197, 94, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4,
+          yAxisID: "y1",
+        },
+      ],
+    };
+  };
+
   if (loading && sleepRecords.length === 0) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
@@ -445,6 +564,21 @@ export default function SleepPage() {
             {error}
           </Alert>
         )}
+
+        {/* Gráfico de Evolução do Sono */}
+        <EvolutionChart
+          title="Evolução do Sono"
+          data={sleepRecords}
+          babies={babies}
+          selectedBaby={selectedBabyChart}
+          onBabyChange={setSelectedBabyChart}
+          periodFilter={periodFilter}
+          onPeriodChange={setPeriodFilter}
+          chartType="line"
+          dataProcessor={processSleepChartData}
+          yAxisLabel="Horas de Sono"
+          loading={loading}
+        />
 
         {/* Bebês dormindo atualmente */}
         {getSleepingBabies().length > 0 && (

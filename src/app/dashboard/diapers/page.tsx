@@ -55,6 +55,7 @@ import { supabase } from "@/lib/supabase";
 import type { Baby } from "@/lib/supabase";
 import { usePageData } from "@/hooks/usePageData";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import EvolutionChart, { PeriodFilter } from "@/components/EvolutionChart";
 
 dayjs.extend(relativeTime);
 dayjs.locale("pt-br");
@@ -116,6 +117,10 @@ export default function DiapersPage() {
     DiaperRecordWithRelations[]
   >([]);
   const [babies, setBabies] = useState<Baby[]>([]);
+  
+  // Estados para o gráfico
+  const [selectedBabyChart, setSelectedBabyChart] = useState<string>("all");
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("week");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] =
     useState<DiaperRecordWithRelations | null>(null);
@@ -365,6 +370,129 @@ export default function DiapersPage() {
     return option?.emoji || "🍼";
   };
 
+  // Função para processar dados do gráfico de fraldas
+  const processDiaperChartData = (data: DiaperRecordWithRelations[], period: PeriodFilter) => {
+    const filteredData = selectedBabyChart === "all" ? data : data.filter(record => record.baby_id === selectedBabyChart);
+    
+    const now = dayjs();
+    let startDate: dayjs.Dayjs;
+    let groupFormat: string;
+    let labelFormat: string;
+    
+    switch (period) {
+      case "day":
+        startDate = now.subtract(6, "day");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+        break;
+      case "week":
+        startDate = now.subtract(3, "week").startOf("week");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+        break;
+      case "month":
+        startDate = now.subtract(5, "month");
+        groupFormat = "YYYY-MM";
+        labelFormat = "MMM/YY";
+        break;
+      default:
+        startDate = now.subtract(3, "week").startOf("week");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+    }
+
+    const periodData = filteredData.filter(record => {
+      const recordDate = dayjs(record.recorded_at);
+      return recordDate.isAfter(startDate);
+    });
+
+    const groupedData: { [key: string]: { [type: string]: number } } = {};
+    
+    periodData.forEach(record => {
+      const recordDate = dayjs(record.recorded_at);
+      const key = recordDate.format(groupFormat);
+      const type = record.diaper_type;
+      
+      if (!groupedData[key]) groupedData[key] = {};
+      if (!groupedData[key][type]) groupedData[key][type] = 0;
+      groupedData[key][type]++;
+    });
+
+    const labels: string[] = [];
+    const totalDiapers: number[] = [];
+    const cocosCount: number[] = [];
+    const pumsCount: number[] = [];
+    const xixisCount: number[] = [];
+
+    let currentDate = startDate;
+    const increment = period === "day" ? 1 : period === "week" ? 7 : 30;
+    const unit = period === "day" ? "day" : period === "week" ? "day" : "month";
+    
+    while (currentDate.isBefore(now) || currentDate.isSame(now, 'day')) {
+      const key = currentDate.format(groupFormat);
+      const label = currentDate.format(labelFormat);
+      
+      labels.push(label);
+      
+      if (groupedData[key]) {
+        const total = Object.values(groupedData[key]).reduce((a, b) => a + b, 0);
+        totalDiapers.push(total);
+        cocosCount.push(groupedData[key]['coco'] || 0);
+        pumsCount.push(groupedData[key]['pum'] || 0);
+        xixisCount.push(groupedData[key]['xixi'] || 0);
+      } else {
+        totalDiapers.push(0);
+        cocosCount.push(0);
+        pumsCount.push(0);
+        xixisCount.push(0);
+      }
+      
+      currentDate = currentDate.add(increment, unit as any);
+    }
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: "Total de Fraldas",
+          data: totalDiapers,
+          borderColor: "rgb(99, 102, 241)",
+          backgroundColor: "rgba(99, 102, 241, 0.1)",
+          borderWidth: 2,
+          fill: true,
+          tension: 0.4,
+        },
+        {
+          label: "💩 Cocôs",
+          data: cocosCount,
+          borderColor: "rgb(139, 69, 19)",
+          backgroundColor: "rgba(139, 69, 19, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4,
+        },
+        {
+          label: "💨 Puns",
+          data: pumsCount,
+          borderColor: "rgb(255, 152, 0)",
+          backgroundColor: "rgba(255, 152, 0, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4,
+        },
+        {
+          label: "💧 Xixis",
+          data: xixisCount,
+          borderColor: "rgb(33, 150, 243)",
+          backgroundColor: "rgba(33, 150, 243, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4,
+        },
+      ],
+    };
+  };
+
   const getTodayStats = () => {
     const today = dayjs().format("YYYY-MM-DD");
     const todayRecords = diaperRecords.filter(
@@ -472,6 +600,21 @@ export default function DiapersPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Gráfico de Evolução das Fraldas */}
+        <EvolutionChart
+          title="Evolução das Fraldas"
+          data={diaperRecords}
+          babies={babies}
+          selectedBaby={selectedBabyChart}
+          onBabyChange={setSelectedBabyChart}
+          periodFilter={periodFilter}
+          onPeriodChange={setPeriodFilter}
+          chartType="line"
+          dataProcessor={processDiaperChartData}
+          yAxisLabel="Número de Fraldas"
+          loading={loading}
+        />
 
         {/* Botões de registro rápido */}
         {babies.length > 0 && (

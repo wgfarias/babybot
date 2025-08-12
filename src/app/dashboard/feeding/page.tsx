@@ -56,6 +56,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Baby } from "@/lib/supabase";
+import EvolutionChart, { PeriodFilter } from "@/components/EvolutionChart";
 
 dayjs.extend(duration);
 dayjs.extend(relativeTime);
@@ -120,6 +121,10 @@ export default function FeedingPage() {
   const [babies, setBabies] = useState<Baby[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // Estados para o gráfico
+  const [selectedBabyChart, setSelectedBabyChart] = useState<string>("all");
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("week");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] =
     useState<FeedingRecordWithRelations | null>(null);
@@ -528,6 +533,144 @@ export default function FeedingPage() {
     return option ? option.label : side;
   };
 
+  // Função para processar dados do gráfico de alimentação
+  const processFeedingChartData = (data: FeedingRecordWithRelations[], period: PeriodFilter) => {
+    // Filtrar dados por bebê selecionado
+    const filteredData = selectedBabyChart === "all" 
+      ? data 
+      : data.filter(record => record.baby_id === selectedBabyChart);
+    
+    // Filtrar por período
+    const now = dayjs();
+    let startDate: dayjs.Dayjs;
+    let groupFormat: string;
+    let labelFormat: string;
+    
+    switch (period) {
+      case "day":
+        startDate = now.subtract(6, "day");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+        break;
+      case "week":
+        startDate = now.subtract(3, "week").startOf("week");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+        break;
+      case "month":
+        startDate = now.subtract(5, "month");
+        groupFormat = "YYYY-MM";
+        labelFormat = "MMM/YY";
+        break;
+      default:
+        startDate = now.subtract(3, "week").startOf("week");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+    }
+
+    // Filtrar registros dentro do período
+    const periodData = filteredData.filter(record => {
+      const recordDate = dayjs(record.feeding_time);
+      return recordDate.isAfter(startDate);
+    });
+
+    // Agrupar dados por período e tipo
+    const groupedData: { [key: string]: { [type: string]: number } } = {};
+    
+    periodData.forEach(record => {
+      const recordDate = dayjs(record.feeding_time);
+      const key = recordDate.format(groupFormat);
+      const type = record.feeding_type;
+      
+      if (!groupedData[key]) {
+        groupedData[key] = {};
+      }
+      if (!groupedData[key][type]) {
+        groupedData[key][type] = 0;
+      }
+      groupedData[key][type]++;
+    });
+
+    // Gerar labels e datasets
+    const labels: string[] = [];
+    const totalFeedings: number[] = [];
+    const breastfeedingCount: number[] = [];
+    const bottleCount: number[] = [];
+    const solidFoodCount: number[] = [];
+
+    // Gerar todas as labels do período
+    let currentDate = startDate;
+    const increment = period === "day" ? 1 : period === "week" ? 7 : 30;
+    const unit = period === "day" ? "day" : period === "week" ? "day" : "month";
+    
+    while (currentDate.isBefore(now) || currentDate.isSame(now, 'day')) {
+      const key = currentDate.format(groupFormat);
+      const label = currentDate.format(labelFormat);
+      
+      labels.push(label);
+      
+      if (groupedData[key]) {
+        const total = Object.values(groupedData[key]).reduce((a, b) => a + b, 0);
+        totalFeedings.push(total);
+        breastfeedingCount.push(groupedData[key]['amamentacao'] || 0);
+        bottleCount.push(groupedData[key]['mamadeira'] || 0);
+        
+        const solidTypes = ['papinha', 'fruta', 'outros'];
+        const solidTotal = solidTypes.reduce((sum, type) => sum + (groupedData[key][type] || 0), 0);
+        solidFoodCount.push(solidTotal);
+      } else {
+        totalFeedings.push(0);
+        breastfeedingCount.push(0);
+        bottleCount.push(0);
+        solidFoodCount.push(0);
+      }
+      
+      currentDate = currentDate.add(increment, unit as any);
+    }
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: "Total de Alimentações",
+          data: totalFeedings,
+          borderColor: "rgb(99, 102, 241)",
+          backgroundColor: "rgba(99, 102, 241, 0.1)",
+          borderWidth: 2,
+          fill: true,
+          tension: 0.4,
+        },
+        {
+          label: "Amamentação",
+          data: breastfeedingCount,
+          borderColor: "rgb(239, 68, 68)",
+          backgroundColor: "rgba(239, 68, 68, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4,
+        },
+        {
+          label: "Mamadeira",
+          data: bottleCount,
+          borderColor: "rgb(34, 197, 94)",
+          backgroundColor: "rgba(34, 197, 94, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4,
+        },
+        {
+          label: "Alimentos Sólidos",
+          data: solidFoodCount,
+          borderColor: "rgb(245, 158, 11)",
+          backgroundColor: "rgba(245, 158, 11, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4,
+        },
+      ],
+    };
+  };
+
   if (loading && feedingRecords.length === 0) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
@@ -565,6 +708,21 @@ export default function FeedingPage() {
             {error}
           </Alert>
         )}
+
+        {/* Gráfico de Evolução da Alimentação */}
+        <EvolutionChart
+          title="Evolução da Alimentação"
+          data={feedingRecords}
+          babies={babies}
+          selectedBaby={selectedBabyChart}
+          onBabyChange={setSelectedBabyChart}
+          periodFilter={periodFilter}
+          onPeriodChange={setPeriodFilter}
+          chartType="line"
+          dataProcessor={processFeedingChartData}
+          yAxisLabel="Número de Alimentações"
+          loading={loading}
+        />
 
         {/* Bebês sendo amamentados atualmente */}
         {getBreastfeedingBabies().length > 0 && (

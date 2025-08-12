@@ -58,6 +58,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Baby } from "@/lib/supabase";
+import EvolutionChart, { PeriodFilter } from "@/components/EvolutionChart";
 import { usePageData } from "@/hooks/usePageData";
 import LoadingSpinner from "@/components/LoadingSpinner";
 
@@ -107,6 +108,10 @@ export default function WalksPage() {
   const { family, caregiver } = useAuth();
   const [walkRecords, setWalkRecords] = useState<WalkRecordWithRelations[]>([]);
   const [babies, setBabies] = useState<Baby[]>([]);
+  
+  // Estados para o gráfico
+  const [selectedBabyChart, setSelectedBabyChart] = useState<string>("all");
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("week");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] =
     useState<WalkRecordWithRelations | null>(null);
@@ -373,6 +378,107 @@ export default function WalksPage() {
     return walkRecords.filter((record) => record.is_walking);
   };
 
+  // Função para processar dados do gráfico de passeios
+  const processWalksChartData = (data: WalkRecordWithRelations[], period: PeriodFilter) => {
+    const filteredData = selectedBabyChart === "all" ? data : data.filter(record => record.baby_id === selectedBabyChart);
+    
+    const now = dayjs();
+    let startDate: dayjs.Dayjs;
+    let groupFormat: string;
+    let labelFormat: string;
+    
+    switch (period) {
+      case "day":
+        startDate = now.subtract(6, "day");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+        break;
+      case "week":
+        startDate = now.subtract(3, "week").startOf("week");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+        break;
+      case "month":
+        startDate = now.subtract(5, "month");
+        groupFormat = "YYYY-MM";
+        labelFormat = "MMM/YY";
+        break;
+      default:
+        startDate = now.subtract(3, "week").startOf("week");
+        groupFormat = "YYYY-MM-DD";
+        labelFormat = "DD/MM";
+    }
+
+    const periodData = filteredData.filter(record => {
+      const recordDate = dayjs(record.walk_start);
+      return recordDate.isAfter(startDate) && record.walk_end;
+    });
+
+    const groupedData: { [key: string]: number[] } = {};
+    
+    periodData.forEach(record => {
+      const recordDate = dayjs(record.walk_start);
+      const key = recordDate.format(groupFormat);
+      
+      if (record.walk_end) {
+        const duration = dayjs(record.walk_end).diff(dayjs(record.walk_start), "minute");
+        if (!groupedData[key]) groupedData[key] = [];
+        groupedData[key].push(duration);
+      }
+    });
+
+    const labels: string[] = [];
+    const averageDuration: number[] = [];
+    const totalWalks: number[] = [];
+
+    let currentDate = startDate;
+    const increment = period === "day" ? 1 : period === "week" ? 7 : 30;
+    const unit = period === "day" ? "day" : period === "week" ? "day" : "month";
+    
+    while (currentDate.isBefore(now) || currentDate.isSame(now, 'day')) {
+      const key = currentDate.format(groupFormat);
+      const label = currentDate.format(labelFormat);
+      
+      labels.push(label);
+      
+      if (groupedData[key]) {
+        const avg = groupedData[key].reduce((a, b) => a + b, 0) / groupedData[key].length;
+        averageDuration.push(Number(avg.toFixed(1)));
+        totalWalks.push(groupedData[key].length);
+      } else {
+        averageDuration.push(0);
+        totalWalks.push(0);
+      }
+      
+      currentDate = currentDate.add(increment, unit as any);
+    }
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: "Duração Média (min)",
+          data: averageDuration,
+          borderColor: "rgb(34, 197, 94)",
+          backgroundColor: "rgba(34, 197, 94, 0.1)",
+          borderWidth: 2,
+          fill: true,
+          tension: 0.4,
+        },
+        {
+          label: "Número de Passeios",
+          data: totalWalks,
+          borderColor: "rgb(99, 102, 241)",
+          backgroundColor: "rgba(99, 102, 241, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4,
+          yAxisID: "y1",
+        },
+      ],
+    };
+  };
+
   if (loading && walkRecords.length === 0) {
     return <LoadingSpinner message="Carregando registros de passeios..." />;
   }
@@ -418,6 +524,21 @@ export default function WalksPage() {
             {error}
           </Alert>
         )}
+
+        {/* Gráfico de Evolução dos Passeios */}
+        <EvolutionChart
+          title="Evolução dos Passeios"
+          data={walkRecords}
+          babies={babies}
+          selectedBaby={selectedBabyChart}
+          onBabyChange={setSelectedBabyChart}
+          periodFilter={periodFilter}
+          onPeriodChange={setPeriodFilter}
+          chartType="line"
+          dataProcessor={processWalksChartData}
+          yAxisLabel="Duração (minutos)"
+          loading={loading}
+        />
 
         {/* Bebês passeando atualmente */}
         {getWalkingBabies().length > 0 && (
